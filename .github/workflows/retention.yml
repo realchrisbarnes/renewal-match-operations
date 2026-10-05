@@ -1,6 +1,11 @@
 name: Renewal Match independent retention
 on:
   workflow_dispatch:
+    inputs:
+      exercise_failure_alert:
+        description: Controlled operational alert drill. Does not alter storage or credentials.
+        type: boolean
+        default: false
   schedule:
     - cron: '17,47 * * * *'
 permissions:
@@ -21,6 +26,9 @@ jobs:
         run: |
           gh api "repos/$GITHUB_REPOSITORY/contents/retention-runner.mjs?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$RUNNER_TEMP/retention-runner.mjs"
           gh api "repos/$GITHUB_REPOSITORY/contents/maintenance-record.mjs?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$RUNNER_TEMP/maintenance-record.mjs"
+      - name: Controlled alert acceptance failure
+        if: ${{ inputs.exercise_failure_alert == true }}
+        run: exit 1
       - name: Preview retention and persisted receipt
         env:
           RETENTION_ORIGIN: https://renewal-match-mission-preview.chris-barnes.chatgpt.site
