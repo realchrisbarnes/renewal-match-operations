@@ -1,0 +1,40 @@
+name: Renewal Match independent retention
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: retention
+  cancel-in-progress: false
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRODUCTION_TOKEN: ${{ secrets.PRODUCTION_RETENTION_TOKEN }}
+    steps:
+      - name: Read exact operational source
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/contents/retention-runner.mjs?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$RUNNER_TEMP/retention-runner.mjs"
+          gh api "repos/$GITHUB_REPOSITORY/contents/maintenance-record.mjs?ref=$GITHUB_SHA" --jq .content | base64 --decode > "$RUNNER_TEMP/maintenance-record.mjs"
+      - name: Preview retention and persisted receipt
+        env:
+          RETENTION_ORIGIN: https://renewal-match-mission-preview.chris-barnes.chatgpt.site
+          RETENTION_TOKEN: ${{ secrets.PREVIEW_RETENTION_TOKEN }}
+          SITE_SERVICE_TOKEN: ${{ secrets.PREVIEW_SITE_SERVICE_TOKEN }}
+        run: node "$RUNNER_TEMP/retention-runner.mjs"
+      - name: Production retention and persisted receipt
+        if: ${{ env.PRODUCTION_TOKEN != '' }}
+        env:
+          RETENTION_ORIGIN: https://renewalmatch.com
+          RETENTION_TOKEN: ${{ secrets.PRODUCTION_RETENTION_TOKEN }}
+        run: node "$RUNNER_TEMP/retention-runner.mjs"
+      - name: Record failure alert or recovery and monthly activity
+        if: always()
+        env:
+          MAINTENANCE_STATUS: ${{ job.status }}
+        run: node "$RUNNER_TEMP/maintenance-record.mjs"
