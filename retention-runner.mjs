@@ -3,10 +3,13 @@ import { pathToFileURL } from 'node:url';
 /** @param {{origin: string, token: string, serviceToken?: string, fetchImpl?: (url: string, init: RequestInit) => Promise<Response>}} options */
 export async function runRetention({ origin, token, serviceToken, fetchImpl = fetch }) {
   if (!['https://renewalmatch.com', 'https://renewal-match-mission-preview.chris-barnes.chatgpt.site'].includes(origin) || !token || token.length < 32) throw new Error('Invalid maintenance configuration');
-  const headers = { authorization: `Bearer ${token}`, ...(serviceToken ? { 'OAI-Sites-Authorization': `Bearer ${serviceToken}` } : {}) };
+  const preview = origin === 'https://renewal-match-mission-preview.chris-barnes.chatgpt.site';
+  const headers = { authorization: `Bearer ${token}`, ...(preview && serviceToken ? { 'OAI-Sites-Authorization': `Bearer ${serviceToken}` } : {}) };
   const call = async (method) => {
     try {
-      const response = await fetchImpl(origin + '/api/internal/retention-automation', { method, headers, redirect: 'error', signal: AbortSignal.timeout(60000) });
+      // Workers implements manual redirects. A 3xx fails the status check, so
+      // credentials never follow a redirected destination in either runtime.
+      const response = await fetchImpl(origin + '/api/internal/retention-automation', { method, headers, redirect: 'manual', signal: AbortSignal.timeout(60000) });
       if (!response.ok) throw new Error('Maintenance request rejected');
       return await response.json();
     } catch { throw new Error('Maintenance request rejected or unavailable'); }
